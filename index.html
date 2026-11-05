@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KHAITECH VENTURES — Sales, Stock & Repairs</title>
+<style>
+:root{--bg:#eef1f4;--cd:#fff;--tx:#162230;--mu:#667487;--pr:#0a6c74;--ink:#12263a;--bd:#d7dde5;--rd:#c0392b;--am:#a86400;--gn:#1d7a3e;--fb:#fff3d6}
+@media(prefers-color-scheme:dark){:root{--bg:#0e141b;--cd:#18212b;--tx:#e6ebf2;--mu:#8e9bad;--pr:#3cc0c9;--ink:#0a1119;--bd:#2a3643;--rd:#ff7b6b;--am:#f2b24c;--gn:#59d286;--fb:#3a2f14}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 "Segoe UI",system-ui,sans-serif}
+header{background:var(--ink);color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+header b{font-size:18px;letter-spacing:.04em}header small{display:block;opacity:.7}
+nav{display:flex;gap:2px;overflow-x:auto;background:var(--cd);border-bottom:1px solid var(--bd);padding:0 10px}
+nav button{background:none;border:0;border-bottom:3px solid transparent;color:var(--mu);padding:12px 14px;cursor:pointer;font:inherit;white-space:nowrap}
+nav button.on{color:var(--pr);border-color:var(--pr);font-weight:600}
+main{max-width:1150px;margin:0 auto;padding:16px}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:6px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 12px;font-size:18px}h3{margin:14px 0 6px;font-size:15px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px}.g2{display:contents}
+label{display:block;font-size:13px;color:var(--mu)}
+input,select,textarea{display:block;width:100%;margin-top:4px;padding:9px;border:1px solid var(--bd);border-radius:4px;background:var(--bg);color:var(--tx);font:inherit}
+textarea{min-height:70px}
+button{background:var(--pr);color:#fff;border:0;border-radius:4px;padding:9px 16px;font:inherit;cursor:pointer}
+button.ghost{background:none;color:var(--pr);border:1px solid var(--pr)}button.s{padding:4px 9px;font-size:13px}
+button.ok{background:var(--gn)}button.no{background:var(--rd)}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--bd);vertical-align:top}th{font-size:13px;color:var(--mu);font-weight:600}
+td small{color:var(--mu)}.mu{color:var(--mu)}
+.b{padding:2px 8px;border-radius:10px;font-size:12px;border:1px solid currentColor}
+.Pending{color:var(--am)}.Approved{color:var(--gn)}.Rejected{color:var(--rd)}
+.fl{background:var(--fb);color:var(--am);padding:2px 6px;border-radius:3px;font-size:12px;margin:2px 0}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.kp div{background:var(--cd);border:1px solid var(--bd);border-left:4px solid var(--pr);padding:12px;border-radius:4px}
+.kp strong{display:block;font-size:22px}.kp .w{border-left-color:var(--am)}
+.lg{max-width:360px;margin:60px auto}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--rd);color:#fff;padding:10px 16px;border-radius:4px;display:none;max-width:90%}#toast.show{display:block}
+details{margin-top:4px}summary{cursor:pointer;color:var(--pr)}
+</style></head><body>
+<div id="app"></div><div id="toast"></div>
+<script>
+/* ===== DATA LAYER =====
+ All reads/writes go through load() and save(). To move to Supabase later,
+ replace these two functions (and the login check) with supabase-js calls. */
+const KEY='khaitech_v1',CUR='₦';
+const today=()=>new Date().toISOString().slice(0,10),uid=()=>Math.random().toString(36).slice(2,10);
+const h=s=>{let x=5381;for(const c of s+'khai')x=(x*33^c.charCodeAt(0))>>>0;return x.toString(36)};
+const e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const N=v=>Number(v)||0,money=v=>CUR+N(v).toLocaleString();
+function seed(){const n=['Phone Case','Screen Protector','Fast Charger','USB Cable (Type-C)','USB Cable (Lightning)','Wired Earphones','Bluetooth Earbuds','Power Bank','Phone Holder','Memory Card','Car Charger','OTG Adapter','Bluetooth Speaker','Smartwatch'];
+return{users:[{id:uid(),name:'Administrator',position:'Admin',username:'admin',pw:h('admin123')}],items:n.map(x=>({id:uid(),name:x,qty:0,price:0,stocked:today()})),sales:[],repairs:[],reports:[],log:[]}}
+function load(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d)return d}catch(x){}return seed()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(x){}}
+let S=load(),me=null,tab='',cart=[],mon=today().slice(0,7);
+try{me=S.users.find(u=>u.id===sessionStorage.getItem('me'))||null}catch(x){}
+/* Access by post. Admin can do everything and is the only approver. */
+const POSTS={Admin:['all'],Manager:['sales','repairs','report'],Secretary:['sales','repairs','report'],'Sales Attendant':['sales'],Technician:['repairs']};
+const can=p=>me.position==='Admin'||(POSTS[me.position]||[]).includes(p);
+const $=s=>document.querySelector(s),val=id=>document.getElementById(id).value;
+function err(m){const t=$('#toast');t.textContent=m;t.className='show';setTimeout(()=>t.className='',3500);return false}
+const inp=(id,l,t='text',v='')=>`<label>${l}<input id="${id}" type="${t}" value="${e(v)}"></label>`;
+const tbl=(hd,rows)=>rows.length?`<div class="sc"><table><thead><tr>${hd.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'<p class="mu">Nothing here yet.</p>';
+const bd=s=>`<span class="b ${s}">${s}</span>`,fl=a=>(a||[]).map(x=>`<div class="fl">⚠ ${e(x)}</div>`).join('');
+const who=r=>`${e(r.by)}<br><small>${e(r.pos)}</small>`,ok=r=>r.status!=='Rejected';
+const stamp=()=>({id:uid(),by:me.name,pos:me.position,u:me.id,status:'Pending',at:new Date().toISOString()});
+const act=(t,r)=>me.position==='Admin'&&r.status==='Pending'?`<button class="s ok" onclick="dec('${t}','${r.id}',1)">Approve</button> <button class="s no" onclick="dec('${t}','${r.id}',0)">Reject</button>`:'';
+function dec(t,id,a){const r=S[t].find(x=>x.id===id);r.status=a?'Approved':'Rejected';r.approver=me.name;
+ if(!a&&t==='sales'&&r.item){const i=S.items.find(x=>x.id===r.item);if(i)i.qty+=r.qty}save();render()}
+/* ===== LOGIN ===== */
+function login(){const u=S.users.find(x=>x.username===val('lu').trim().toLowerCase()&&x.pw===h(val('lp')));
+ if(!u)return err('Wrong username or password.');me=u;try{sessionStorage.setItem('me',u.id)}catch(x){}tab='';render()}
+function logout(){me=null;cart=[];try{sessionStorage.removeItem('me')}catch(x){}render()}
+/* ===== FLAG RULES ===== */
+function saleFlags(L){const f=[],d=(new Date(today())-new Date(L.date))/864e5;
+ if(d>3)f.push(`Back-dated ${Math.round(d)} days`);if(d<0)f.push('Future date');
+ if(L.cat==='Accessory'){if(!L.std)f.push('No list price set for this item');else if(Math.abs(L.price-L.std)/L.std>.2)f.push(`Price ${money(L.price)} differs from list ${money(L.std)}`)}
+ else if(!/^\d{15}$/.test(L.imei))f.push('Missing or invalid IMEI');
+ else if(S.sales.some(s=>s.imei===L.imei&&ok(s)))f.push('This IMEI was already sold');
+ return f}
+function repFlags(R){const f=[];
+ if(!/^\d{15}$/.test(R.imei))f.push('Missing or invalid IMEI');
+ else if(S.repairs.some(s=>s.imei===R.imei&&ok(s)&&!s.collected))f.push('Same IMEI already has an open repair');
+ if(R.price<=0)f.push('Repair price is zero');
+ if(R.cd<R.date)f.push('Collection date is before date received');
+ if(R.cp.replace(/\D/g,'').length<10)f.push('Customer phone looks incomplete');
+ if(R.date>today())f.push('Future date');return f}
+/* ===== SALES ===== */
+function tg(){const p=val('cat')==='Phone';$('#acc').style.display=p?'none':'';$('#ph').style.display=p?'':'none'}
+function fp(){const i=S.items.find(x=>x.id===val('it'));if(i)document.getElementById('pr').value=i.price||''}
+function addLine(){const L={cat:val('cat'),date:val('sd'),qty:Math.max(1,parseInt(val('q'))||1),price:N(val('pr')),cust:val('cu').trim()};
+ if(!L.date)return err('Pick a date.');
+ if(L.cat==='Accessory'){const it=S.items.find(i=>i.id===val('it'));if(!it)return err('Choose an accessory.');
+  const used=cart.filter(c=>c.item===it.id).reduce((a,c)=>a+c.qty,0);
+  if(L.qty+used>it.qty)return err(`Only ${it.qty-used} ${it.name} left in the shop.`);Object.assign(L,{item:it.id,name:it.name,std:it.price})}
+ else{L.name=(val('br')+' '+val('md')).trim();if(!L.name)return err('Enter the phone brand and model.');L.imei=val('im').trim();L.qty=1}
+ if(L.price<=0)return err('Enter a unit price above zero.');cart.push(L);render()}
+function subSales(){cart.forEach(L=>{if(L.item)S.items.find(i=>i.id===L.item).qty-=L.qty;S.sales.push({...L,...stamp(),flags:saleFlags(L)})});cart=[];save();tab='mine';render()}
+const saleRows=a=>a.map(r=>[r.date,e(r.name)+(r.imei?`<br><small>IMEI ${e(r.imei)}</small>`:''),r.qty,money(r.price),money(r.qty*r.price),who(r),fl(r.flags),bd(r.status),act('sales',r)]);
+const saleHd=['Date','Item','Qty','Unit','Total','Sent by','Flags','Status',''];
+/* ===== REPAIRS ===== */
+function subRep(){const R={date:val('rd'),brand:val('rb').trim(),model:val('rm').trim(),imei:val('ri').trim(),fault:val('rf').trim(),price:N(val('rp')),cd:val('rc'),cn:val('cn').trim(),cp:val('cp').trim(),ca:val('ca').trim()};
+ if(!R.date||!R.model||!R.fault||!R.cd||!R.cn||!R.cp||!R.ca)return err('Fill in date, model, fault, collection date and the customer name, phone and address.');
+ S.repairs.push({...R,...stamp(),flags:repFlags(R)});save();tab='mine';render()}
+function collect(id){const r=S.repairs.find(x=>x.id===id);r.collected=today();save();render()}
+const repRows=a=>a.map(r=>[r.date,`${e(r.cn)}<br><small>${e(r.cp)}<br>${e(r.ca)}</small>`,`${e(r.brand)} ${e(r.model)}<br><small>IMEI ${e(r.imei)||'—'}</small>`,e(r.fault),money(r.price),r.cd+(r.collected?`<br><small>Collected ${r.collected}</small>`:''),who(r),fl(r.flags),bd(r.status),act('repairs',r)+(me.position==='Admin'&&r.status==='Approved'&&!r.collected?`<button class="s" onclick="collect('${r.id}')">Mark collected</button>`:'')]);
+const repHd=['Received','Customer','Phone','Fault','Price','Collection','Sent by','Flags','Status',''];
+/* ===== WEEKLY REPORT & AUDIT ===== */
+function wkSum(we){const f=new Date(new Date(we)-6*864e5).toISOString().slice(0,10),i=r=>ok(r)&&r.date>=f&&r.date<=we;
+ return{sales:S.sales.filter(i).reduce((a,r)=>a+r.qty*r.price,0),rep:S.repairs.filter(i).reduce((a,r)=>a+r.price,0)}}
+function subWk(){const we=val('we'),c=val('cash');if(!we||c==='')return err('Enter the week-ending date and the cash declared.');
+ const s=wkSum(we),exp=s.sales+s.rep,f=[];
+ const audit=S.items.map(i=>{const v=val('ph_'+i.id);return{id:i.id,name:i.name,sys:i.qty,phys:v===''?null:N(v)}});
+ audit.forEach(a=>{if(a.phys===null)f.push(`${a.name}: not counted`);else if(a.phys!==a.sys)f.push(`${a.name}: system ${a.sys}, counted ${a.phys} (${a.phys>a.sys?'+':''}${a.phys-a.sys})`)});
+ if(N(c)!==exp)f.push(`Cash declared ${money(c)} but sales + repairs for the week are ${money(exp)}`);
+ if(S.reports.some(r=>r.we===we&&ok(r)))f.push('A report for this week already exists');
+ S.reports.push({...stamp(),we,date:we,cash:N(c),exp,audit,notes:val('wn'),flags:f});save();tab='mine';render()}
+function applyAudit(id){const r=S.reports.find(x=>x.id===id);r.audit.forEach(a=>{const i=S.items.find(x=>x.id===a.id);if(i&&a.phys!==null)i.qty=a.phys});r.applied=true;save();render()}
+const wkRows=a=>a.map(r=>[r.we,who(r),money(r.exp),money(r.cash),fl(r.flags)+(r.notes?`<small>Note: ${e(r.notes)}</small>`:''),bd(r.status),act('reports',r)+(me.position==='Admin'&&r.status==='Approved'&&!r.applied?`<button class="s" onclick="applyAudit('${r.id}')">Apply counted stock</button>`:'')]);
+const wkHd=['Week ending','Sent by','Expected','Declared','Audit flags & notes','Status',''];
+/* ===== INVENTORY ===== */
+function addItem(){const n=val('ni').trim();if(!n)return err('Enter the accessory name.');
+ if(S.items.some(i=>i.name.toLowerCase()===n.toLowerCase()))return err('That accessory already exists.');
+ const it={id:uid(),name:n,qty:N(val('nq')),price:N(val('np')),stocked:val('nd')||today()};S.items.push(it);
+ if(it.qty)S.log.push({d:it.stocked,n,q:it.qty,by:me.name});save();render()}
+function restock(id){const i=S.items.find(x=>x.id===id),q=parseInt(prompt('Quantity received for '+i.name+'?'));if(!q||q<0)return;
+ i.qty+=q;i.stocked=today();S.log.push({d:i.stocked,n:i.name,q,by:me.name});save();render()}
+function setPrice(id){const i=S.items.find(x=>x.id===id),p=prompt('List price for '+i.name,i.price);if(p===null)return;i.price=N(p);save();render()}
+/* ===== STAFF ===== */
+function addUser(){const n=val('sn').trim(),p=val('sp'),u=val('su').trim().toLowerCase(),pw=val('spw');if(!n||!u)return err('Enter the name and username.');
+ const x=S.users.find(a=>a.username===u);
+ if(x){x.name=n;x.position=p;if(pw){if(pw.length<6)return err('Password needs at least 6 characters.');x.pw=h(pw)}}
+ else{if(pw.length<6)return err('Password needs at least 6 characters.');S.users.push({id:uid(),name:n,position:p,username:u,pw:h(pw)})}save();render()}
+function resetPw(id){const u=S.users.find(x=>x.id===id),p=prompt('New password for '+u.name+' (min 6 characters)');if(!p)return;if(p.length<6)return err('Too short.');u.pw=h(p);save();err('Password changed.')}
+function delUser(id){if(id===me.id)return err('You cannot remove yourself.');if(!confirm('Remove this staff member?'))return;S.users=S.users.filter(x=>x.id!==id);save();render()}
+function backup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='khaitech-backup.json';a.click()}
+/* ===== VIEWS ===== */
+const V={
+dash(){const td=today(),m=td.slice(0,7),sv=p=>S.sales.filter(r=>ok(r)&&p(r)).reduce((a,r)=>a+r.qty*r.price,0);
+ const pend=[...S.sales,...S.repairs,...S.reports].filter(r=>r.status==='Pending').length;
+ const all=[['Sale',S.sales],['Repair',S.repairs],['Weekly report',S.reports]].flatMap(([t,a])=>a.filter(r=>ok(r)&&r.flags.length).map(r=>[t,r]));
+ const low=S.items.filter(i=>i.qty<=5),od=S.repairs.filter(r=>ok(r)&&!r.collected&&r.cd<td);
+ return`<div class="kp"><div><small>Sales today</small><strong>${money(sv(r=>r.date===td))}</strong></div><div><small>Sales this month</small><strong>${money(sv(r=>r.date.startsWith(m)))}</strong></div><div><small>Repairs this month</small><strong>${S.repairs.filter(r=>ok(r)&&r.date.startsWith(m)).length}</strong></div><div class="w"><small>Waiting for approval</small><strong>${pend}</strong></div><div class="w"><small>Flagged records</small><strong>${all.length}</strong></div></div>
+ <div class="card"><h2>Alerts</h2><h3>Low stock (5 or fewer)</h3>${low.length?low.map(i=>`<div class="fl">⚠ ${e(i.name)}: ${i.qty} left</div>`).join(''):'<p class="mu">All accessories are above 5.</p>'}
+ <h3>Repairs past collection date and not collected</h3>${od.length?od.map(r=>`<div class="fl">⚠ ${e(r.cn)} (${e(r.cp)}), ${e(r.model)}, due ${r.cd}</div>`).join(''):'<p class="mu">None.</p>'}</div>
+ <div class="card"><h2>Flagged records</h2>${tbl(['Type','Sent by','Date','Flags','Status'],all.slice(-20).reverse().map(([t,r])=>[t,who(r),r.date,fl(r.flags),bd(r.status)]))}</div>
+ <button class="ghost" onclick="backup()">Download data backup (JSON)</button>`},
+appr(){const p=t=>S[t].filter(r=>r.status==='Pending');
+ return`<div class="card"><h2>Sales waiting</h2>${tbl(saleHd,saleRows(p('sales')))}</div><div class="card"><h2>Repairs waiting</h2>${tbl(repHd,repRows(p('repairs')))}</div><div class="card"><h2>Weekly reports waiting</h2>${tbl(wkHd,wkRows(p('reports')))}</div>`},
+sales(){return`<div class="card"><h2>All sales</h2>${tbl(saleHd,saleRows([...S.sales].reverse()))}</div>`},
+rep(){return`<div class="card"><h2>All repairs</h2>${tbl(repHd,repRows([...S.repairs].reverse()))}</div>`},
+wk(){return`<div class="card"><h2>Weekly reports & audits</h2>${tbl(wkHd,wkRows([...S.reports].reverse()))}</div>`},
+inv(){return`<div class="card"><h2>Add a new accessory</h2><div class="g">${inp('ni','Accessory name')}${inp('nq','Opening quantity','number','0')}${inp('np','List price','number')}${inp('nd','Date stocked','date',today())}</div><button onclick="addItem()">Add accessory</button></div>
+ <div class="card"><h2>Accessories in the shop</h2>${tbl(['Accessory','Balance','List price','Last stocked',''],S.items.map(i=>[e(i.name),`<b>${i.qty}</b>${i.qty<=5?' <span class="fl">low</span>':''}`,money(i.price),i.stocked,`<button class="s" onclick="restock('${i.id}')">Restock</button> <button class="s ghost" onclick="setPrice('${i.id}')">Set price</button>`]))}</div>
+ <div class="card"><h2>Stock-in history</h2>${tbl(['Date','Accessory','Qty added','Recorded by'],[...S.log].reverse().map(l=>[l.d,e(l.n),l.q,e(l.by)]))}</div>`},
+rpt(){const D={},M={},d=x=>D[x]??={u:0,v:0,it:{},rc:0,rv:0},mm=x=>M[x]??={u:0,v:0,rc:0,rv:0};
+ S.sales.filter(ok).forEach(r=>{const m=mm(r.date.slice(0,7));m.u+=r.qty;m.v+=r.qty*r.price;if(r.date.startsWith(mon)){const x=d(r.date);x.u+=r.qty;x.v+=r.qty*r.price;x.it[r.name]=(x.it[r.name]||0)+r.qty}});
+ S.repairs.filter(ok).forEach(r=>{const m=mm(r.date.slice(0,7));m.rc++;m.rv+=r.price;if(r.date.startsWith(mon)){const x=d(r.date);x.rc++;x.rv+=r.price}});
+ return`<div class="card"><h2>Sales per day</h2><label style="max-width:200px">Month<input type="month" value="${mon}" onchange="mon=this.value;render()"></label>
+ ${tbl(['Date','What was sold','Units','Sales','Repairs','Repair income'],Object.keys(D).sort().reverse().map(k=>[k,Object.entries(D[k].it).map(([n,q])=>`${e(n)} ×${q}`).join(', ')||'—',D[k].u,money(D[k].v),D[k].rc,money(D[k].rv)]))}</div>
+ <div class="card"><h2>Monthly totals</h2>${tbl(['Month','Units sold','Sales','Repairs','Repair income','Total income'],Object.keys(M).sort().reverse().map(k=>[k,M[k].u,money(M[k].v),M[k].rc,money(M[k].rv),`<b>${money(M[k].v+M[k].rv)}</b>`]))}<p class="mu">Includes pending and approved records. Rejected records are left out.</p></div>`},
+staff(){return`<div class="card"><h2>Add staff or change a post</h2><div class="g">${inp('sn','Full name')}<label>Post<select id="sp">${Object.keys(POSTS).map(p=>`<option>${p}`).join('')}</select></label>${inp('su','Username')}${inp('spw','Password (leave blank to keep)')}</div><button onclick="addUser()">Save staff</button>
+ <p class="mu">Access by post: ${Object.entries(POSTS).map(([p,a])=>`${p} → ${a.join(', ')}`).join(' · ')}</p></div>
+ <div class="card">${tbl(['Name','Post','Username','Access',''],S.users.map(u=>[e(u.name),e(u.position),e(u.username),POSTS[u.position].join(', '),`<button class="s" onclick="resetPw('${u.id}')">Set password</button> <button class="s no" onclick="delUser('${u.id}')">Remove</button>`]))}</div>`},
+nsale(){return`<div class="card"><h2>Daily sales sheet</h2><div class="g">${inp('sd','Date','date',today())}<label>Type<select id="cat" onchange="tg()"><option>Accessory<option>Phone</select></label>
+ <div id="acc" class="g2"><label>Accessory<select id="it" onchange="fp()"><option value="">Select…${S.items.map(i=>`<option value="${i.id}">${e(i.name)} (${i.qty} in shop)`).join('')}</select></label></div>
+ <div id="ph" class="g2" style="display:none">${inp('br','Phone brand')}${inp('md','Model')}${inp('im','IMEI (15 digits)')}</div>${inp('q','Quantity','number','1')}${inp('pr','Unit price','number')}${inp('cu','Customer (optional)')}</div>
+ <button onclick="addLine()">Add to sheet</button></div>
+ <div class="card"><h2>Sheet ready to send</h2>${tbl(['Date','Item','Qty','Unit','Total'],cart.map(L=>[L.date,e(L.name),L.qty,money(L.price),money(L.qty*L.price)]))}${cart.length?`<button onclick="subSales()">Send to admin for approval</button> <button class="ghost" onclick="cart=[];render()">Clear sheet</button>`:''}</div>`},
+nrep(){return`<div class="card"><h2>Phone brought for repair</h2><div class="g">${inp('rd','Date received','date',today())}${inp('rb','Brand')}${inp('rm','Model')}${inp('ri','IMEI (15 digits)')}${inp('rp','Repair price','number')}${inp('rc','Collection date','date')}</div>
+ <label>Fault<textarea id="rf"></textarea></label><h3>Customer</h3><div class="g">${inp('cn','Name')}${inp('cp','Phone number','tel')}${inp('ca','Address')}</div><button onclick="subRep()">Send to admin for approval</button></div>`},
+nwk(){const we=today(),s=wkSum(we);return`<div class="card"><h2>Weekly report and stock audit</h2><div class="g">${inp('we','Week ending','date',we)}${inp('cash','Total cash and transfers declared','number')}</div>
+ <p class="mu">Last 7 days: sales ${money(s.sales)} + repairs ${money(s.rep)} = ${money(s.sales+s.rep)} expected.</p><h3>Count the shop and enter what is on the shelf</h3>
+ ${tbl(['Accessory','System balance','Counted'],S.items.map(i=>[e(i.name),i.qty,`<input id="ph_${i.id}" type="number" min="0">`]))}<label>Notes or problems this week<textarea id="wn"></textarea></label><button onclick="subWk()">Send to admin</button></div>`},
+mine(){const m=a=>a.filter(r=>r.u===me.id).reverse();return`${can('sales')?`<div class="card"><h2>My sales</h2>${tbl(saleHd.slice(0,-1),saleRows(m(S.sales)).map(r=>r.slice(0,-1)))}</div>`:''}${can('repairs')?`<div class="card"><h2>My repairs</h2>${tbl(repHd.slice(0,-1),repRows(m(S.repairs)).map(r=>r.slice(0,-1)))}</div>`:''}${can('report')?`<div class="card"><h2>My weekly reports</h2>${tbl(wkHd.slice(0,-1),wkRows(m(S.reports)).map(r=>r.slice(0,-1)))}</div>`:''}`}};
+function tabs(){return me.position==='Admin'?[['dash','Dashboard'],['appr','Approvals'],['sales','Sales'],['rep','Repairs'],['inv','Accessories'],['wk','Weekly reports'],['rpt','Daily & monthly'],['staff','Staff']]:[...(can('sales')?[['nsale','New sale']]:[]),...(can('repairs')?[['nrep','New repair']]:[]),...(can('report')?[['nwk','Weekly report']]:[]),['mine','My submissions']]}
+function render(){const a=$('#app');
+ if(!me){a.innerHTML=`<header><b>KHAITECH VENTURES</b></header><div class="card lg"><h2>Staff sign in</h2>${inp('lu','Username')}<br>${inp('lp','Password','password')}<br><button onclick="login()">Sign in</button><p class="mu">First time? Username <b>admin</b>, password <b>admin123</b>. Change it under Staff right away.</p></div>`;return}
+ const t=tabs();if(!t.some(x=>x[0]===tab))tab=t[0][0];
+ a.innerHTML=`<header><div><b>KHAITECH VENTURES</b><small>Phone sales and repair</small></div><div>${e(me.name)} · ${e(me.position)} <button class="s ghost" style="color:#fff;border-color:#fff" onclick="logout()">Sign out</button></div></header>
+ <nav>${t.map(x=>`<button class="${x[0]===tab?'on':''}" onclick="tab='${x[0]}';render()">${x[1]}</button>`).join('')}</nav><main>${V[tab]()}</main>`}
+render();
+</script></body></html>
